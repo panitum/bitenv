@@ -1,0 +1,105 @@
+x-php: &php
+  build:
+    context: ./php
+    args:
+      PHP_VERSION: ${PHP_VERSION}
+      HOST_UID: ${HOST_UID}
+      HOST_GID: ${HOST_GID}
+
+services:
+  nginx:
+    image: nginx:1.31-alpine
+    ports:
+      - "${HTTP_PORT}:80"
+      - "${HTTPS_PORT}:443"
+    environment:
+      SERVER_NAME: ${SERVER_NAME}
+      HTTPS_PORT: ${HTTPS_PORT}
+      TZ: ${TZ}
+    volumes:
+      - ./../src/www:/var/www/html
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./private/ssl:/etc/nginx/ssl:ro
+    networks:
+      default:
+        aliases:
+          - ${SERVER_NAME}
+    depends_on:
+      - php
+    restart: unless-stopped
+
+  php:
+    <<: *php
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./../src/www:/var/www/html
+      - ./private/ssl/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
+      - ./php/conf.d/bitrix.ini:/usr/local/etc/php/conf.d/zz-bitrix.ini:ro
+      - ./php/php-fpm.d/bitrix.conf:/usr/local/etc/php-fpm.d/zz-bitrix.conf:ro
+      - ./php/msmtprc:/etc/msmtprc:ro
+      - ./php/crontab:/etc/crontabs/www-data:ro
+    command: sh -c "update-ca-certificates && exec php-fpm" # dev cert
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  cron:
+    <<: *php
+    command:
+      - sh
+      - -c
+      - update-ca-certificates && # dev cert
+      - exec crond -f -l 2 # crond из BusyBox: -f — работать на переднем плане, -l 2 — подробный лог в stdout
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - ./../src/www:/var/www/html
+      - ./private/ssl/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
+      - ./php/conf.d/bitrix.ini:/etc/php/conf.d/zz-bitrix.ini:ro
+      - ./php/php-fpm.d/bitrix.conf:/usr/local/etc/php-fpm.d/zz-bitrix.conf:ro
+      - ./php/msmtprc:/etc/msmtprc:ro
+      - ./php/crontab:/etc/crontabs/www-data:ro
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:10.11.19
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - ./private/mariadb_data:/var/lib/mysql
+      - ./mariadb/bitrix.cnf:/etc/mysql/conf.d/bitrix.cnf:ro
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.11-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:

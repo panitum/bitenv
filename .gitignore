@@ -1,0 +1,9 @@
+.idea
+.DS_Store
+
+/src
+/docker/logs
+/docker/private
+/docker/nginx/conf.d
+
+.env

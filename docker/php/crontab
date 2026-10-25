@@ -1,0 +1,1 @@
+* * * * * /usr/local/bin/php -f /var/www/html/bitrix/modules/main/tools/cron_events.php > /dev/null 2>&1
