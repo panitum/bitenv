@@ -5,6 +5,9 @@ x-php: &php
       PHP_VERSION: ${PHP_VERSION}
       HOST_UID: ${HOST_UID}
       HOST_GID: ${HOST_GID}
+      INSTALL_XDEBUG: ${INSTALL_XDEBUG:-false}
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
 
 services:
   nginx:
@@ -35,9 +38,11 @@ services:
     <<: *php
     environment:
       TZ: ${TZ}
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
     volumes:
       - ./../src/www:/var/www/html
       - ./private/ssl/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
+      - ./php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/zz-xdebug.ini:ro
       - ./php/conf.d/bitrix.ini:/usr/local/etc/php/conf.d/zz-bitrix.ini:ro
       - ./php/php-fpm.d/bitrix.conf:/usr/local/etc/php-fpm.d/zz-bitrix.conf:ro
       - ./php/msmtprc:/etc/msmtprc:ro
@@ -54,9 +59,11 @@ services:
     command: sh -c "update-ca-certificates && exec crond -f -l 2"
     environment:
       TZ: ${TZ}
+      XDEBUG_MODE: ${XDEBUG_MODE:-off}
     volumes:
       - ./../src/www:/var/www/html
       - ./private/ssl/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
+      - ./php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/zz-xdebug.ini:ro
       - ./php/conf.d/bitrix.ini:/usr/local/etc/php/conf.d/zz-bitrix.ini:ro
       - ./php/php-fpm.d/bitrix.conf:/usr/local/etc/php-fpm.d/zz-bitrix.conf:ro
       - ./php/msmtprc:/etc/msmtprc:ro

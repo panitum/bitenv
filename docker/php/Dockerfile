@@ -16,6 +16,9 @@ RUN install-php-extensions  \
     sockets \
     redis
 
+ARG INSTALL_XDEBUG=false
+RUN if [ "$INSTALL_XDEBUG" = "true" ]; then install-php-extensions xdebug; fi
+
 RUN apk add --no-cache  \
     # замена sendmail для mail(); \
     msmtp \
