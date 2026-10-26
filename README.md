@@ -77,7 +77,8 @@ cp .env.example .env
 | `COMPOSE_PROJECT_NAME` | Префикс имён контейнеров и сети. Уникальный для каждого проекта на машине |
 | `SERVER_NAME` | Домен сайта, например `bitrix-dev.local` |
 | `TZ` | Часовой пояс для PHP, MariaDB и nginx |
-| `HTTP_PORT`, `HTTPS_PORT` | Порты на хосте |
+| `HTTP_PORT`, `HTTPS_PORT` | Порты сайта на хосте |
+| `MYSQL_PORT`, `MAILPIT_PORT` | Порты MariaDB и веб-интерфейса mailpit на `127.0.0.1` хоста (по умолчанию `3306` и `8025`) |
 | `PHP_VERSION` | Тег образа `php:<версия>-fpm-alpine` |
 | `HOST_UID`, `HOST_GID` | Результат `id -u` и `id -g` на хосте |
 | `INSTALL_XDEBUG` | `true` — встроить Xdebug в образ (по умолчанию `false`) |
@@ -163,11 +164,11 @@ cp bitrix/settings_extra.php ../src/www/local/.settings_extra.php
 | Что | Где |
 |---|---|
 | Сайт | `https://<SERVER_NAME>` (HTTP редиректит на HTTPS) |
-| Mailpit | http://localhost:8025 |
-| MariaDB с хоста | `127.0.0.1:3306`, учётные данные из `.env` |
+| Mailpit | `http://localhost:<MAILPIT_PORT>` |
+| MariaDB с хоста | `127.0.0.1:<MYSQL_PORT>`, учётные данные из `.env` |
 | MariaDB / Redis из контейнеров | хосты `mariadb:3306` / `redis:6379` |
 
-Порты `3306` и `8025` зафиксированы в `docker-compose.yml` — при одновременном запуске нескольких проектов их нужно развести.
+При одновременном запуске нескольких проектов у каждого должны быть свои `COMPOSE_PROJECT_NAME`, `HTTP_PORT`, `HTTPS_PORT`, `MYSQL_PORT` и `MAILPIT_PORT`.
 
 ## Xdebug
 
@@ -195,4 +196,4 @@ docker compose exec mariadb sh -c 'mariadb-dump -uroot -p"$MYSQL_ROOT_PASSWORD" 
 
 - Переменные `MYSQL_*` применяются только при первой инициализации базы. Данные хранятся в `docker/private/mariadb_data` (bind mount), поэтому `docker compose down -v` их **не** удаляет — для пересоздания базы нужно очистить эту папку.
 - Файл `crontab` должен заканчиваться переводом строки, иначе последнее задание игнорируется.
-- Для прода: сертификат Let's Encrypt, HSTS (`security-headers.conf`), убрать mailpit и проброс `3306`, прописать реальный SMTP в `msmtprc`.
+- Для прода: сертификат Let's Encrypt, HSTS (`security-headers.conf`), убрать mailpit и проброс порта MariaDB, прописать реальный SMTP в `msmtprc`.
