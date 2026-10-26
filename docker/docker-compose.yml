@@ -50,17 +50,14 @@ services:
 
   cron:
     <<: *php
-    command:
-      - sh
-      - -c
-      - update-ca-certificates && # dev cert
-      - exec crond -f -l 2 # crond из BusyBox: -f — работать на переднем плане, -l 2 — подробный лог в stdout
+    # update-ca-certificates — dev cert; crond из BusyBox: -f — работать на переднем плане, -l 2 — подробный лог в stdout
+    command: sh -c "update-ca-certificates && exec crond -f -l 2"
     environment:
       TZ: ${TZ}
     volumes:
       - ./../src/www:/var/www/html
       - ./private/ssl/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
-      - ./php/conf.d/bitrix.ini:/etc/php/conf.d/zz-bitrix.ini:ro
+      - ./php/conf.d/bitrix.ini:/usr/local/etc/php/conf.d/zz-bitrix.ini:ro
       - ./php/php-fpm.d/bitrix.conf:/usr/local/etc/php-fpm.d/zz-bitrix.conf:ro
       - ./php/msmtprc:/etc/msmtprc:ro
       - ./php/crontab:/etc/crontabs/www-data:ro
