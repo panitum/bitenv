@@ -1,0 +1,29 @@
+services:
+  nginx:
+    networks:
+      proxy: {}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.tcp.routers.${COMPOSE_PROJECT_NAME}-https.rule=HostSNI(`${SERVER_NAME}`)"
+      - "traefik.tcp.routers.${COMPOSE_PROJECT_NAME}-https.entrypoints=websecure"
+      - "traefik.tcp.routers.${COMPOSE_PROJECT_NAME}-https.tls.passthrough=true"
+      - "traefik.tcp.routers.${COMPOSE_PROJECT_NAME}-https.service=${COMPOSE_PROJECT_NAME}-https"
+      - "traefik.tcp.services.${COMPOSE_PROJECT_NAME}-https.loadbalancer.server.port=443"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.rule=Host(`${SERVER_NAME}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.entrypoints=web"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-http.service=${COMPOSE_PROJECT_NAME}-http"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-http.loadbalancer.server.port=80"
+
+  mailpit:
+    networks:
+      default: {}
+      proxy: {}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mail.rule=Host(`mail.${SERVER_NAME}`)"
+      - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mail.entrypoints=web"
+      - "traefik.http.services.${COMPOSE_PROJECT_NAME}-mail.loadbalancer.server.port=8025"
+
+networks:
+  proxy:
+    external: true

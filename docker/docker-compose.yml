@@ -12,12 +12,9 @@ x-php: &php
 services:
   nginx:
     image: nginx:1.31-alpine
-    ports:
-      - "${HTTP_PORT}:80"
-      - "${HTTPS_PORT}:443"
     environment:
       SERVER_NAME: ${SERVER_NAME}
-      HTTPS_PORT: ${HTTPS_PORT}
+      HTTPS_PORT: 443
       TZ: ${TZ}
     volumes:
       - ./../src/www:/var/www/html
@@ -101,8 +98,6 @@ services:
 
   mailpit:
     image: axllent/mailpit
-    ports:
-      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
     restart: unless-stopped
 
 volumes:

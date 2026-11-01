@@ -18,6 +18,7 @@
 - Пользователь `www-data` в контейнерах PHP получает UID/GID хоста — файлы, созданные Битриксом, остаются доступными на хосте без `chown`.
 - Корневой сертификат mkcert добавляется в доверенные внутри `php` и `cron`, а домен сайта доступен из контейнеров как сетевой алиас `nginx` — поэтому запросы PHP к собственному сайту по HTTPS работают (пункт «Работа с сокетами» в «Проверке системы»).
 - Xdebug встраивается в образ по флагу и включается/выключается без пересборки.
+- Два режима публикации сайта и mailpit, переключаются одной переменной: через общий прокси Traefik — несколько проектов одновременно на 80/443, каждый на своём домене; или напрямую на порты хоста, как обычный автономный стек.
 
 ## Структура
 
@@ -26,7 +27,9 @@
 ├── docker/
 │   ├── .env.example                  ← шаблон настроек окружения
 │   ├── .env                          ← настройки проекта (не в git)
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml            ← все сервисы, без публикации сайта и mailpit наружу
+│   ├── docker-compose.traefik.yml    ← режим «Traefik»: сеть proxy и labels
+│   ├── docker-compose.ports.yml      ← режим «без Traefik»: порты хоста
 │   ├── bitrix/
 │   │   └── settings_extra.php        ← шаблон подключения кеша Битрикса к Redis
 │   ├── mariadb/
@@ -62,6 +65,7 @@
 
 - Docker с Compose v2
 - [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` на macOS) и однократно выполненный `mkcert -install`
+- Для режима «Traefik»: запущенный Traefik и общая сеть `proxy` (`docker network create proxy`, один раз на машину). Без сети `docker compose up` завершится ошибкой `network proxy declared as external, but could not be found`
 
 ### 1. Создать `.env`
 
@@ -77,8 +81,9 @@ cp .env.example .env
 | `COMPOSE_PROJECT_NAME` | Префикс имён контейнеров и сети. Уникальный для каждого проекта на машине |
 | `SERVER_NAME` | Домен сайта, например `bitrix-dev.local` |
 | `TZ` | Часовой пояс для PHP, MariaDB и nginx |
-| `HTTP_PORT`, `HTTPS_PORT` | Порты сайта на хосте |
-| `MYSQL_PORT`, `MAILPIT_PORT` | Порты MariaDB и веб-интерфейса mailpit на `127.0.0.1` хоста (по умолчанию `3306` и `8025`) |
+| `COMPOSE_FILE` | Режим публикации — см. [Режимы публикации](#режимы-публикации) |
+| `MYSQL_PORT` | Порт MariaDB на `127.0.0.1` хоста (по умолчанию `3306`) |
+| `HTTP_PORT`, `HTTPS_PORT`, `MAILPIT_PORT` | Порты сайта и mailpit на хосте, только в режиме без Traefik (по умолчанию `80`, `443`, `8025`) |
 | `PHP_VERSION` | Тег образа `php:<версия>-fpm-alpine` |
 | `HOST_UID`, `HOST_GID` | Результат `id -u` и `id -g` на хосте |
 | `INSTALL_XDEBUG` | `true` — встроить Xdebug в образ (по умолчанию `false`) |
@@ -88,8 +93,10 @@ cp .env.example .env
 ### 2. Прописать домен в hosts
 
 ```bash
-echo "127.0.0.1 bitrix-dev.local" | sudo tee -a /etc/hosts
+echo "127.0.0.1 bitrix-dev.local mail.bitrix-dev.local" | sudo tee -a /etc/hosts
 ```
+
+Поддомен `mail.` нужен только в режиме «Traefik».
 
 ### 3. Выпустить сертификат и скопировать rootCA.pem
 
@@ -159,23 +166,37 @@ cp bitrix/settings_extra.php ../src/www/local/.settings_extra.php
 
 **Проверка системы.** Запустить в админке и пройтись по замечаниям.
 
+## Режимы публикации
+
+Базовый `docker-compose.yml` не публикует сайт и mailpit наружу — это делает один из двух overlay-файлов. Какие файлы читать, Compose берёт из переменной `COMPOSE_FILE` в `.env`:
+
+| Режим | `COMPOSE_FILE` | Сайт | Mailpit |
+|---|---|---|---|
+| Traefik | `docker-compose.yml:docker-compose.traefik.yml` | `https://<SERVER_NAME>` | `http://mail.<SERVER_NAME>` |
+| Без Traefik | `docker-compose.yml:docker-compose.ports.yml` | `https://<SERVER_NAME>:<HTTPS_PORT>` (порт не пишется, если `443`) | `http://localhost:<MAILPIT_PORT>` |
+
+Переключение — поменять `COMPOSE_FILE` и выполнить `docker compose up -d`: Compose сам пересоздаст nginx и mailpit. Остальные контейнеры не перезапускаются.
+
+- Режим «Traefik» — для нескольких проектов одновременно: прокси принимает 80/443 и раздаёт запросы по домену. Как устроена маршрутизация — в `~/Projects/traefik/docs/traefik.html`.
+- Режим без Traefik — автономный стек, как до появления прокси. Порты 80/443 в нём занимает nginx проекта, поэтому одновременно с Traefik он запустится только на других `HTTP_PORT`/`HTTPS_PORT` — или остановить прокси: `docker compose stop` в `~/Projects/traefik`.
+- Без `COMPOSE_FILE` Compose прочитает только `docker-compose.yml`: всё запустится, но сайт будет недоступен с хоста.
+
 ## Адреса и доступы
 
 | Что | Где |
 |---|---|
-| Сайт | `https://<SERVER_NAME>` (HTTP редиректит на HTTPS) |
-| Mailpit | `http://localhost:<MAILPIT_PORT>` |
+| Сайт и mailpit | см. [Режимы публикации](#режимы-публикации) |
 | MariaDB с хоста | `127.0.0.1:<MYSQL_PORT>`, учётные данные из `.env` |
 | MariaDB / Redis из контейнеров | хосты `mariadb:3306` / `redis:6379` |
 
-При одновременном запуске нескольких проектов у каждого должны быть свои `COMPOSE_PROJECT_NAME`, `HTTP_PORT`, `HTTPS_PORT`, `MYSQL_PORT` и `MAILPIT_PORT`.
+При одновременном запуске нескольких проектов у каждого должны быть свои `COMPOSE_PROJECT_NAME` (в режиме «Traefik» из него строятся имена маршрутов), `SERVER_NAME` и `MYSQL_PORT`, а в режиме без Traefik — ещё и `HTTP_PORT`, `HTTPS_PORT`, `MAILPIT_PORT`.
 
 ## Xdebug
 
 1. В `.env`: `INSTALL_XDEBUG=true`, затем `docker compose up -d --build`.
 2. Для включения: `XDEBUG_MODE=debug` (или `profile`), затем `docker compose up -d` — без пересборки.
 3. Отладка запускается по триггеру (`start_with_request = trigger`): расширение Xdebug Helper в браузере, IDE key `PHPSTORM`, порт `9003`.
-4. В PhpStorm: *Settings → PHP → Servers* — Host = `SERVER_NAME`, порт `443`, включить path mappings: `src/www` → `/var/www/html`.
+4. В PhpStorm: *Settings → PHP → Servers* — Host = `SERVER_NAME`, порт `443` (или `HTTPS_PORT` в режиме без Traefik), включить path mappings: `src/www` → `/var/www/html`.
 
 Профили (`profile`) сохраняются в `/tmp` контейнера: `docker compose cp php:/tmp/cachegrind.out.<pid> .`
 
