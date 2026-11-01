@@ -28,7 +28,7 @@
 │   ├── .env.example                  ← шаблон настроек окружения
 │   ├── .env                          ← настройки проекта (не в git)
 │   ├── docker-compose.yml            ← все сервисы, без публикации сайта и mailpit наружу
-│   ├── docker-compose.traefik.yml    ← режим «Traefik»: сеть proxy и labels
+│   ├── docker-compose.traefik.yml    ← режим «Traefik»: сеть bitenv-proxy и labels
 │   ├── docker-compose.ports.yml      ← режим «без Traefik»: порты хоста
 │   ├── bitrix/
 │   │   └── settings_extra.php        ← шаблон подключения кеша Битрикса к Redis
@@ -65,7 +65,7 @@
 
 - Docker с Compose v2
 - [mkcert](https://github.com/FiloSottile/mkcert) (`brew install mkcert` на macOS) и однократно выполненный `mkcert -install`
-- Только для режима «Traefik»: установленный отдельным проектом и запущенный [bitenv-traefik](https://github.com/panitum/bitenv-traefik) — см. [Режим «Traefik»](#режим-traefik). Режим по умолчанию (без Traefik) ничего дополнительно не требует
+- Только для режима «Traefik»: установленный отдельным проектом и запущенный [bitenv-proxy](https://github.com/panitum/bitenv-proxy) — см. [Режим «Traefik»](#режим-traefik). Режим по умолчанию (без Traefik) ничего дополнительно не требует
 
 ### 1. Создать `.env`
 
@@ -179,15 +179,15 @@ cp docker/bitrix/settings_extra.php src/www/local/.settings_extra.php
 
 Переключение — поменять `COMPOSE_FILE` и выполнить `docker compose up -d`: Compose сам пересоздаст nginx и mailpit. Остальные контейнеры не перезапускаются.
 
-- Режим без Traefik (по умолчанию в `.env.example`) — автономный стек, ничего дополнительно ставить не нужно. Порты 80/443 в нём занимает nginx проекта, поэтому одновременно с Traefik он запустится только на других `HTTP_PORT`/`HTTPS_PORT` — или остановить прокси: `docker compose stop` в папке проекта bitenv-traefik.
+- Режим без Traefik (по умолчанию в `.env.example`) — автономный стек, ничего дополнительно ставить не нужно. Порты 80/443 в нём занимает nginx проекта, поэтому одновременно с Traefik он запустится только на других `HTTP_PORT`/`HTTPS_PORT` — или остановить прокси: `docker compose stop` в папке проекта bitenv-proxy.
 - Режим «Traefik» — для нескольких проектов одновременно: прокси принимает 80/443 и раздаёт запросы по домену.
 - Без `COMPOSE_FILE` Compose прочитает только `docker-compose.yml`: всё запустится, но сайт будет недоступен с хоста.
 
 ### Режим «Traefik»
 
-Traefik не входит в это окружение: он ставится **отдельным проектом** из репозитория [bitenv-traefik](https://github.com/panitum/bitenv-traefik) — один на машину для всех проектов. Клонировать его нужно в отдельную папку, вне этого проекта. Инструкция по установке и настройке (включая создание общей сети `proxy`) и описание маршрутизации находятся внутри репозитория.
+Traefik не входит в это окружение: он ставится **отдельным проектом** из репозитория [bitenv-proxy](https://github.com/panitum/bitenv-proxy) — один на машину для всех проектов. Клонировать его нужно в отдельную папку, вне этого проекта. Инструкция по установке и настройке (включая создание общей сети `bitenv-proxy`) и описание маршрутизации находятся внутри репозитория.
 
-Когда Traefik запущен, в `docker/.env` указать `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml` и выполнить `docker compose up -d`. Если сети `proxy` нет, Compose завершится ошибкой `network proxy declared as external, but could not be found`.
+Когда Traefik запущен, в `docker/.env` указать `COMPOSE_FILE=docker-compose.yml:docker-compose.traefik.yml` и выполнить `docker compose up -d`. Если сети `bitenv-proxy` нет, Compose завершится ошибкой `network bitenv-proxy declared as external, but could not be found`.
 
 ## Адреса и доступы
 

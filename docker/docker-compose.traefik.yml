@@ -1,7 +1,7 @@
 services:
   nginx:
     networks:
-      proxy: {}
+      bitenv-proxy: {}
     labels:
       - "traefik.enable=true"
       - "traefik.tcp.routers.${COMPOSE_PROJECT_NAME}-https.rule=HostSNI(`${SERVER_NAME}`)"
@@ -17,7 +17,7 @@ services:
   mailpit:
     networks:
       default: {}
-      proxy: {}
+      bitenv-proxy: {}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.${COMPOSE_PROJECT_NAME}-mail.rule=Host(`mail.${SERVER_NAME}`)"
@@ -25,5 +25,5 @@ services:
       - "traefik.http.services.${COMPOSE_PROJECT_NAME}-mail.loadbalancer.server.port=8025"
 
 networks:
-  proxy:
+  bitenv-proxy:
     external: true
