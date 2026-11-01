@@ -57,7 +57,7 @@
     └── www/                          ← корень сайта (bitrix/, local/, upload/, index.php)
 ```
 
-Все команды `docker compose` выполняются из папки `docker/`.
+Все команды ниже выполняются из корня проекта. Compose ищет файлы из `COMPOSE_FILE` относительно текущей папки, поэтому `docker compose` запускается в подоболочке `(cd docker && docker compose …)` — текущая папка терминала при этом не меняется. Домен в командах берётся из `SERVER_NAME` в `docker/.env`, так что их можно копировать без правок.
 
 ## Быстрый старт
 
@@ -70,8 +70,7 @@
 ### 1. Создать `.env`
 
 ```bash
-cd docker
-cp .env.example .env
+cp docker/.env.example docker/.env
 ```
 
 Заполнить значения:
@@ -93,7 +92,8 @@ cp .env.example .env
 ### 2. Прописать домен в hosts
 
 ```bash
-echo "127.0.0.1 bitrix-dev.local mail.bitrix-dev.local" | sudo tee -a /etc/hosts
+SERVER_NAME=$(sed -n 's/^SERVER_NAME=//p' docker/.env)
+echo "127.0.0.1 $SERVER_NAME mail.$SERVER_NAME" | sudo tee -a /etc/hosts
 ```
 
 Поддомен `mail.` нужен только в режиме «Traefik».
@@ -103,23 +103,24 @@ echo "127.0.0.1 bitrix-dev.local mail.bitrix-dev.local" | sudo tee -a /etc/hosts
 Сертификат должен называться по домену из `SERVER_NAME` — без него nginx не стартует. `rootCA.pem` нужен контейнерам PHP, чтобы доверять сайту.
 
 ```bash
-mkdir -p private/ssl
-mkcert -cert-file private/ssl/bitrix-dev.local.pem -key-file private/ssl/bitrix-dev.local-key.pem bitrix-dev.local
-cp "$(mkcert -CAROOT)/rootCA.pem" private/ssl/
+SERVER_NAME=$(sed -n 's/^SERVER_NAME=//p' docker/.env)
+mkdir -p docker/private/ssl
+mkcert -cert-file "docker/private/ssl/$SERVER_NAME.pem" -key-file "docker/private/ssl/$SERVER_NAME-key.pem" "$SERVER_NAME"
+cp "$(mkcert -CAROOT)/rootCA.pem" docker/private/ssl/
 ```
 
 В итоге в `docker/private/ssl/` должны лежать:
 
 ```
-bitrix-dev.local.pem
-bitrix-dev.local-key.pem
+<SERVER_NAME>.pem
+<SERVER_NAME>-key.pem
 rootCA.pem
 ```
 
 ### 4. Подготовить корень сайта
 
 ```bash
-mkdir -p ../src/www
+mkdir -p src/www
 ```
 
 Положить в `src/www/`:
@@ -130,14 +131,14 @@ mkdir -p ../src/www
 ### 5. Запустить
 
 ```bash
-docker compose up -d --build
+(cd docker && docker compose up -d --build)
 ```
 
 Первый старт MariaDB занимает до минуты: `php` и `cron` ждут, пока база станет `healthy` (`docker compose ps`).
 
 ### 6. Установить Битрикс
 
-Открыть `https://bitrix-dev.local/bitrixsetup.php` (или `restore.php`). Параметры подключения к БД:
+Открыть `https://<SERVER_NAME>/bitrixsetup.php` (или `restore.php`). Параметры подключения к БД:
 
 - сервер: `mariadb`
 - база, пользователь, пароль — из `.env`
@@ -149,7 +150,8 @@ docker compose up -d --build
 **Кеш в Redis.** Скопировать шаблон в корень сайта:
 
 ```bash
-cp bitrix/settings_extra.php ../src/www/local/.settings_extra.php
+mkdir -p src/www/local
+cp docker/bitrix/settings_extra.php src/www/local/.settings_extra.php
 ```
 
 **Агенты на cron.** Контейнер `cron` уже запускает `cron_events.php` каждую минуту; чтобы агенты перестали выполняться на хитах:
@@ -193,7 +195,7 @@ cp bitrix/settings_extra.php ../src/www/local/.settings_extra.php
 
 ## Xdebug
 
-1. В `.env`: `INSTALL_XDEBUG=true`, затем `docker compose up -d --build`.
+1. В `docker/.env`: `INSTALL_XDEBUG=true`, затем `docker compose up -d --build`.
 2. Для включения: `XDEBUG_MODE=debug` (или `profile`), затем `docker compose up -d` — без пересборки.
 3. Отладка запускается по триггеру (`start_with_request = trigger`): расширение Xdebug Helper в браузере, IDE key `PHPSTORM`, порт `9003`.
 4. В PhpStorm: *Settings → PHP → Servers* — Host = `SERVER_NAME`, порт `443` (или `HTTPS_PORT` в режиме без Traefik), включить path mappings: `src/www` → `/var/www/html`.
